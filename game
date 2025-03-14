@@ -1,0 +1,376 @@
+import React, { useState, useEffect } from 'react';
+
+const CrosswordGame = () => {
+  // Sample puzzle data - can be expanded or modified
+  const [puzzle] = useState({
+    grid: [
+      ['F', 'O', 'C', 'U', 'S', '', '', ''],
+      ['', '', 'A', '', 'T', '', '', ''],
+      ['', '', 'L', '', 'R', '', '', ''],
+      ['', 'B', 'M', 'I', 'E', 'N', 'G', 'T', 'H'],
+      ['', 'R', '', '', 'N', '', '', ''],
+      ['', 'E', '', '', 'G', '', '', ''],
+      ['', 'A', 'D', 'A', 'T', 'H', '', ''],
+      ['', 'K', '', '', 'H', '', '', '']
+    ],
+    clues: {
+      across: [
+        { number: 1, row: 0, col: 0, clue: "Mental concentration on a task", answer: "FOCUS" },
+        { number: 2, row: 3, col: 1, clue: "Short rests to recharge mental energy", answer: "BREAKS" },
+        { number: 3, row: 3, col: 3, clue: "The power to persist with tasks", answer: "STRENGTH" },
+        { number: 4, row: 6, col: 1, clue: "Adjusting tasks to fit your needs", answer: "ADAPT" }
+      ],
+      down: [
+        { number: 5, row: 0, col: 2, clue: "A feeling of tranquility", answer: "CALM" },
+        { number: 6, row: 0, col: 4, clue: "The systematic order of completing tasks", answer: "STRATEGY" },
+        { number: 7, row: 2, col: 2, clue: "A period of heightened attention and productivity", answer: "LIMELIGHT" }
+      ]
+    }
+  });
+
+  const [userInputs, setUserInputs] = useState(Array(puzzle.grid.length).fill().map(() => Array(puzzle.grid[0].length).fill('')));
+  const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
+  const [direction, setDirection] = useState('across');
+  const [completed, setCompleted] = useState(false);
+  const [hints, setHints] = useState(0);
+  const [timer, setTimer] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [feedback, setFeedback] = useState('');
+
+  // Timer effect
+  useEffect(() => {
+    let interval;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setTimer(prevTimer => prevTimer + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
+
+  // Check if the puzzle is completed
+  useEffect(() => {
+    const isComplete = puzzle.grid.every((row, rowIndex) => 
+      row.every((cell, colIndex) => 
+        cell === '' || cell === userInputs[rowIndex][colIndex]
+      )
+    );
+    
+    if (isComplete && userInputs.some(row => row.some(cell => cell !== ''))) {
+      setCompleted(true);
+      setIsTimerRunning(false);
+      setFeedback('Congratulations! You completed the puzzle!');
+    }
+  }, [userInputs, puzzle.grid]);
+
+  // Handle cell click
+  const handleCellClick = (rowIndex, colIndex) => {
+    if (puzzle.grid[rowIndex][colIndex] === '') return;
+    
+    if (selectedCell.row === rowIndex && selectedCell.col === colIndex) {
+      // Toggle direction when clicking the same cell
+      setDirection(prev => prev === 'across' ? 'down' : 'across');
+    } else {
+      setSelectedCell({ row: rowIndex, col: colIndex });
+    }
+  };
+
+  // Handle key press
+  const handleKeyDown = (e, rowIndex, colIndex) => {
+    if (e.key === 'Backspace') {
+      const newInputs = [...userInputs];
+      newInputs[rowIndex][colIndex] = '';
+      setUserInputs(newInputs);
+      
+      // Move to previous cell
+      moveToAdjacentCell(rowIndex, colIndex, -1);
+    } else if (/^[a-zA-Z]$/.test(e.key)) {
+      const newInputs = [...userInputs];
+      newInputs[rowIndex][colIndex] = e.key.toUpperCase();
+      setUserInputs(newInputs);
+      
+      // Move to next cell
+      moveToAdjacentCell(rowIndex, colIndex, 1);
+    } else if (e.key === 'ArrowRight') {
+      moveToNextCellInDirection(rowIndex, colIndex, 0, 1);
+    } else if (e.key === 'ArrowLeft') {
+      moveToNextCellInDirection(rowIndex, colIndex, 0, -1);
+    } else if (e.key === 'ArrowDown') {
+      moveToNextCellInDirection(rowIndex, colIndex, 1, 0);
+    } else if (e.key === 'ArrowUp') {
+      moveToNextCellInDirection(rowIndex, colIndex, -1, 0);
+    }
+  };
+
+  // Move to adjacent cell based on current direction
+  const moveToAdjacentCell = (rowIndex, colIndex, step) => {
+    if (direction === 'across') {
+      moveToNextCellInDirection(rowIndex, colIndex, 0, step);
+    } else {
+      moveToNextCellInDirection(rowIndex, colIndex, step, 0);
+    }
+  };
+
+  // Move to the next valid cell in the specified direction
+  const moveToNextCellInDirection = (rowIndex, colIndex, rowStep, colStep) => {
+    let newRow = rowIndex + rowStep;
+    let newCol = colIndex + colStep;
+    
+    // Stay within grid bounds
+    while (
+      newRow >= 0 && 
+      newRow < puzzle.grid.length && 
+      newCol >= 0 && 
+      newCol < puzzle.grid[0].length
+    ) {
+      if (puzzle.grid[newRow][newCol] !== '') {
+        setSelectedCell({ row: newRow, col: newCol });
+        return;
+      }
+      newRow += rowStep;
+      newCol += colStep;
+    }
+  };
+
+  // Get cell background color
+  const getCellBackground = (rowIndex, colIndex, isSelected) => {
+    if (isSelected) return 'bg-yellow-200';
+    
+    if (puzzle.grid[rowIndex][colIndex] === '') return 'bg-gray-800';
+    
+    const letter = userInputs[rowIndex][colIndex];
+    if (letter && letter !== puzzle.grid[rowIndex][colIndex]) {
+      return 'bg-red-100'; // Incorrect letter
+    }
+    
+    return 'bg-white';
+  };
+
+  // Find clue number for a cell
+  const getCellNumber = (rowIndex, colIndex) => {
+    const acrossClue = puzzle.clues.across.find(
+      clue => clue.row === rowIndex && clue.col === colIndex
+    );
+    
+    const downClue = puzzle.clues.down.find(
+      clue => clue.row === rowIndex && clue.col === colIndex
+    );
+    
+    return acrossClue?.number || downClue?.number || null;
+  };
+
+  // Get a hint (reveal a random cell)
+  const getHint = () => {
+    if (completed) return;
+    
+    const emptyCells = [];
+    for (let row = 0; row < puzzle.grid.length; row++) {
+      for (let col = 0; col < puzzle.grid[0].length; col++) {
+        if (
+          puzzle.grid[row][col] !== '' && 
+          userInputs[row][col] !== puzzle.grid[row][col]
+        ) {
+          emptyCells.push({ row, col });
+        }
+      }
+    }
+    
+    if (emptyCells.length > 0) {
+      const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+      const newInputs = [...userInputs];
+      newInputs[randomCell.row][randomCell.col] = puzzle.grid[randomCell.row][randomCell.col];
+      setUserInputs(newInputs);
+      setHints(hints + 1);
+      setFeedback(`Hint used! The letter ${puzzle.grid[randomCell.row][randomCell.col]} has been revealed.`);
+    } else {
+      setFeedback("No more cells to reveal!");
+    }
+  };
+
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Reset the game
+  const resetGame = () => {
+    setUserInputs(Array(puzzle.grid.length).fill().map(() => Array(puzzle.grid[0].length).fill('')));
+    setSelectedCell({ row: 0, col: 0 });
+    setDirection('across');
+    setCompleted(false);
+    setHints(0);
+    setTimer(0);
+    setIsTimerRunning(true);
+    setFeedback('');
+  };
+
+  // Get current clue
+  const getCurrentClue = () => {
+    const { row, col } = selectedCell;
+    
+    const acrossClues = puzzle.clues.across.filter(
+      clue => clue.row === row && col >= clue.col && col < clue.col + clue.answer.length
+    );
+    
+    const downClues = puzzle.clues.down.filter(
+      clue => clue.col === col && row >= clue.row && row < clue.row + clue.answer.length
+    );
+    
+    if (direction === 'across' && acrossClues.length > 0) {
+      return acrossClues[0];
+    } else if (direction === 'down' && downClues.length > 0) {
+      return downClues[0];
+    } else if (acrossClues.length > 0) {
+      return acrossClues[0];
+    } else if (downClues.length > 0) {
+      return downClues[0];
+    }
+    
+    return null;
+  };
+
+  const currentClue = getCurrentClue();
+
+  return (
+    <div className="p-4 max-w-4xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left section: Game info and controls */}
+        <div className="space-y-6">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-purple-700">Focus Flow Crossword</h1>
+            <p className="text-gray-600">A crossword game designed for neurodivergent minds</p>
+          </div>
+          
+          <div className="bg-purple-100 p-4 rounded-lg">
+            <h2 className="font-bold text-lg mb-2">Current Clue</h2>
+            {currentClue ? (
+              <p className="text-lg">
+                {currentClue.number}. {currentClue.clue} ({direction})
+              </p>
+            ) : (
+              <p>Select a cell to see the clue</p>
+            )}
+          </div>
+          
+          <div className="flex justify-between items-center bg-blue-100 p-4 rounded-lg">
+            <div>
+              <p className="font-bold">Time: {formatTime(timer)}</p>
+              <p>Hints used: {hints}</p>
+            </div>
+            <div className="space-x-2">
+              <button 
+                onClick={getHint} 
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+                disabled={completed}
+              >
+                Hint
+              </button>
+              <button 
+                onClick={resetGame} 
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+              >
+                Reset
+              </button>
+              <button 
+                onClick={() => setIsTimerRunning(!isTimerRunning)} 
+                className={`${isTimerRunning ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600'} text-white px-4 py-2 rounded`}
+              >
+                {isTimerRunning ? 'Pause' : 'Resume'}
+              </button>
+            </div>
+          </div>
+          
+          {feedback && (
+            <div className={`p-4 rounded-lg text-center ${completed ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+              {feedback}
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            <h2 className="font-bold text-lg">Across</h2>
+            <ul className="space-y-2">
+              {puzzle.clues.across.map(clue => (
+                <li key={`across-${clue.number}`} className="cursor-pointer hover:bg-gray-100 p-2 rounded">
+                  <span className="font-bold">{clue.number}.</span> {clue.clue}
+                </li>
+              ))}
+            </ul>
+            
+            <h2 className="font-bold text-lg">Down</h2>
+            <ul className="space-y-2">
+              {puzzle.clues.down.map(clue => (
+                <li key={`down-${clue.number}`} className="cursor-pointer hover:bg-gray-100 p-2 rounded">
+                  <span className="font-bold">{clue.number}.</span> {clue.clue}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        
+        {/* Right section: Crossword grid */}
+        <div className="flex justify-center">
+          <div 
+            className="grid gap-0 border-2 border-black" 
+            style={{ 
+              gridTemplateRows: `repeat(${puzzle.grid.length}, 40px)`,
+              gridTemplateColumns: `repeat(${puzzle.grid[0].length}, 40px)`
+            }}
+          >
+            {puzzle.grid.map((row, rowIndex) => (
+              row.map((cell, colIndex) => {
+                const isSelected = selectedCell.row === rowIndex && selectedCell.col === colIndex;
+                const cellNumber = getCellNumber(rowIndex, colIndex);
+                const backgroundColor = getCellBackground(rowIndex, colIndex, isSelected);
+                
+                return (
+                  <div 
+                    key={`${rowIndex}-${colIndex}`}
+                    className={`border border-gray-400 relative ${backgroundColor} ${cell !== '' ? 'cursor-pointer' : ''}`}
+                    onClick={() => cell !== '' && handleCellClick(rowIndex, colIndex)}
+                  >
+                    {cellNumber && (
+                      <span className="absolute text-xs top-0 left-0 pl-1">{cellNumber}</span>
+                    )}
+                    {cell !== '' && (
+                      <input 
+                        type="text"
+                        className="w-full h-full text-center uppercase bg-transparent font-bold text-lg"
+                        value={userInputs[rowIndex][colIndex]}
+                        onChange={(e) => {
+                          if (/^[a-zA-Z]?$/.test(e.target.value)) {
+                            const newInputs = [...userInputs];
+                            newInputs[rowIndex][colIndex] = e.target.value.toUpperCase();
+                            setUserInputs(newInputs);
+                          }
+                        }}
+                        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                        onClick={(e) => e.target.select()}
+                        maxLength={1}
+                        ref={el => isSelected && el && el.focus()}
+                      />
+                    )}
+                  </div>
+                );
+              })
+            ))}
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-8 bg-green-100 p-4 rounded-lg">
+        <h2 className="font-bold text-lg mb-2">Tips for Neurodivergent Players</h2>
+        <ul className="list-disc pl-6 space-y-2">
+          <li>Try playing for short periods (5-15 minutes) to maintain focus</li>
+          <li>Use the pause button when you need a break</li>
+          <li>Don't worry about using hints - they're there to help!</li>
+          <li>Try using the arrow keys to navigate the puzzle</li>
+          <li>Click a cell twice to switch between across and down</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default CrosswordGame;
